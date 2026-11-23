@@ -279,6 +279,20 @@ section h2{font-size:clamp(1.9rem,4vw,2.8rem)!important;line-height:1.15!importa
 #about .vm p{font-size:clamp(1.05rem,1.6vw,1.25rem)!important;font-weight:600;line-height:1.55;color:var(--mute);text-indent:0}
 /* ===== Blue liquid cursor (fluid simulation) ===== */
 #liquidFx{position:fixed;inset:0;width:100vw;height:100vh;pointer-events:none;z-index:0}
+
+/* ===== Arrows for Leadership / Products + slower hero photo zoom ===== */
+.marquee{overflow:hidden!important;touch-action:pan-y;cursor:grab;user-select:none;-webkit-user-select:none}
+.marquee.drag{cursor:grabbing}
+.mtrack{will-change:transform;backface-visibility:hidden}
+@media(prefers-reduced-motion:reduce){.marquee{overflow-x:auto!important;cursor:auto}.mtrack{will-change:auto}}
+.marquee::-webkit-scrollbar{display:none}
+.marquee.at-start{-webkit-mask-image:linear-gradient(90deg,#000,#000 94%,transparent);mask-image:linear-gradient(90deg,#000,#000 94%,transparent)}
+.mtrack{animation:none!important}
+.mq-wrap{position:relative}
+.mq-wrap .car-btn{z-index:6;top:calc(50% - 6px)}
+.mq-wrap .car-btn.prev{left:4px}
+.mq-wrap .car-btn.next{right:4px}
+.zoom{transition:left 1.5s cubic-bezier(.22,.7,.3,1),top 1.5s cubic-bezier(.22,.7,.3,1),width 1.5s cubic-bezier(.22,.7,.3,1),height 1.5s cubic-bezier(.22,.7,.3,1),opacity .45s!important}
 </style>
 </head>
 <body>
@@ -618,7 +632,7 @@ if(new URLSearchParams(location.search).get('applied')==='1'){
       if(zi.dataset.k!==im.alt){zi.src=im.src;zi.dataset.k=im.alt;}zi.alt=im.alt;zi.style.objectPosition=im.style.objectPosition||'50% 50%';
       z.style.transition='none';put(box(fig));z.classList.add('on');z.getBoundingClientRect();z.style.transition='';
       put({l:0,t:0,w:g.clientWidth,h:g.clientHeight});};
-    const close=fig=>{if(cur!==fig)return;cur=null;put(box(fig));t=setTimeout(()=>{if(!cur)z.classList.remove('on');},560);};
+    const close=fig=>{if(cur!==fig)return;cur=null;put(box(fig));t=setTimeout(()=>{if(!cur)z.classList.remove('on');},1550);};
     g.querySelectorAll('figure').forEach(f=>{
       f.addEventListener('mouseenter',()=>open(f));f.addEventListener('mouseleave',()=>close(f));
       f.addEventListener('click',()=>{if(matchMedia('(hover:none)').matches)cur===f?close(f):open(f);});});
@@ -830,6 +844,63 @@ if(new URLSearchParams(location.search).get('applied')==='1'){
     if(now-lastMove<4500)requestAnimationFrame(frame);else{running=false;gl.clearColor(0,0,0,0);gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.clear(gl.COLOR_BUFFER_BIT)}
   }
   function start(){if(!running){running=true;lastT=performance.now();requestAnimationFrame(frame)}}
+})();
+</script>
+
+<script>
+/* Leadership & Products: smooth continuous slide + arrows + drag (CEO always first) */
+(function(){
+  var still=matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var L='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>',R='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>';
+  document.querySelectorAll('.marquee').forEach(function(mq){
+    var tr=mq.querySelector('.mtrack');if(!tr)return;
+    var wrap=document.createElement('div');wrap.className='mq-wrap';
+    mq.parentNode.insertBefore(wrap,mq);wrap.appendChild(mq);
+    function btn(cls,label,svg){var b=document.createElement('button');b.type='button';b.className='car-btn '+cls;b.setAttribute('aria-label',label);b.innerHTML=svg;wrap.appendChild(b);return b}
+    var pv=btn('prev','Previous',L),nx=btn('next','Next',R);
+    var isLead=!!mq.closest('#leadership'),speed=isLead?42:30;
+    var pos=0,H=0,dragging=false,animating=false,visible=false,resumeAt=0,last=0;
+    function measure(){var d=tr.querySelector('[aria-hidden="true"]');H=(!d||getComputedStyle(d).display==='none')?0:tr.getBoundingClientRect().width/2}
+    function cardW(){var c=tr.firstElementChild;return c?c.getBoundingClientRect().width+22:300}
+    function norm(){if(H)pos=((pos%H)+H)%H}
+    function apply(){tr.style.transform='translate3d('+(-pos).toFixed(2)+'px,0,0)';mq.classList.toggle('at-start',pos<2)}
+    addEventListener('resize',measure);addEventListener('load',measure);measure();
+    function go(dir){
+      if(animating||dragging)return;
+      if(still){mq.scrollBy({left:dir*cardW(),behavior:'auto'});return}
+      measure();var st=cardW();
+      if(H&&dir<0&&pos<st)pos+=H;
+      var from=pos,to=from+dir*st;
+      animating=true;var t0=performance.now(),D=560;
+      (function tick(now){
+        var k=Math.max(0,Math.min((now-t0)/D,1)),e=k<.5?4*k*k*k:1-Math.pow(-2*k+2,3)/2;
+        pos=from+(to-from)*e;apply();
+        if(k<1)requestAnimationFrame(tick);else{animating=false;norm();apply();resumeAt=performance.now()+1500}
+      })(t0);
+    }
+    pv.addEventListener('click',function(){go(-1)});nx.addEventListener('click',function(){go(1)});
+    /* drag / swipe */
+    var sx=0,sp=0;
+    if(!still){
+      mq.addEventListener('pointerdown',function(e){if(e.button>0||animating)return;dragging=true;sx=e.clientX;sp=pos;measure();mq.classList.add('drag');try{mq.setPointerCapture(e.pointerId)}catch(_){}});
+      mq.addEventListener('pointermove',function(e){if(!dragging)return;pos=sp-(e.clientX-sx);if(H)pos=((pos%H)+H)%H;apply()});
+      var end=function(){if(!dragging)return;dragging=false;mq.classList.remove('drag');norm();apply();resumeAt=performance.now()+1500};
+      mq.addEventListener('pointerup',end);mq.addEventListener('pointercancel',end);
+    }
+    /* run only while on screen; leadership always restarts at the CEO */
+    var sec=mq.closest('section'),wasOut=true;
+    new IntersectionObserver(function(es){es.forEach(function(e){
+      visible=e.isIntersecting;
+      if(e.isIntersecting&&wasOut&&isLead){pos=0;apply();resumeAt=performance.now()+2500}
+      wasOut=!e.isIntersecting;
+    })},{threshold:[0,.2]}).observe(wrap);
+    function loop(now){
+      var dt=Math.min((now-last)/1000,.05);last=now;
+      if(!still&&visible&&!dragging&&!animating&&now>resumeAt&&!document.hidden){pos+=speed*dt;norm();apply()}
+      requestAnimationFrame(loop);
+    }
+    resumeAt=performance.now()+2500;apply();requestAnimationFrame(function(t){last=t;loop(t)});
+  });
 })();
 </script>
 </body>
